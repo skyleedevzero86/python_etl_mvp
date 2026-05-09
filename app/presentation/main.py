@@ -1,0 +1,143 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from app.infrastructure.logging_config import (
+    configure_root_logging,
+    log_dir,
+    setup_uncaught_exception_logfile,
+)
+
+_CRASH_LOG = setup_uncaught_exception_logfile()
+_APP_LOG = configure_root_logging()
+
+import logging
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from starlette.requests import Request
+
+from app.infrastructure.config import Settings
+from app.infrastructure.database import create_engine_from_settings, create_session_factory
+from app.infrastructure.scheduler import start_weekly_pipeline_scheduler
+from app.presentation.routers import dashboard, health, pipeline
+
+logger = logging.getLogger(__name__)
+
+logger.info(
+    "로그 디렉터리: %s | 앱 로그: %s | 마지막 크래시 덤프: %s",
+    log_dir(),
+    _APP_LOG,
+    _CRASH_LOG,
+)
+
+_sched = None
+
+
+def _fail_fast_if_db_secret_missing(settings: Settings) -> None:
+    if (
+        settings.database_user
+        and settings.database_user.lower() not in {"root"}
+        and settings.database_password == ""
+    ):
+        msg = (
+            "DB 접속 정보가 비어 있습니다. "
+            f"계정={settings.database_user} 호스트={settings.database_host} DB={settings.database_name} "
+            f"| .env={settings.resolved_dotenv_files or '없음'} "
+            "| DATABASE_PASSWORD 를 .env 에 설정하세요."
+        )
+        logger.error(msg)
+        raise RuntimeError(msg) from None
+
+
+def _mysql_errno_from_operational_error(exc: OperationalError) -> int | None:
+    orig = getattr(exc, "orig", None)
+    if orig is None:
+        return None
+    args = getattr(orig, "args", ())
+    if not args:
+        return None
+    code = args[0]
+    return code if isinstance(code, int) else None
+
+
+def _verify_mysql_or_raise(engine, settings: Settings) -> None:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except OperationalError as e:
+        errno = _mysql_errno_from_operational_error(e)
+        if errno == 1045:
+            detail = str(getattr(e, "orig", e))
+            using_password_no = "USING PASSWORD: NO" in detail.upper()
+            hint = (
+                "MySQL 1045 인증 실패. 사용자/비밀번호 또는 host 권한을 확인하세요. "
+                f"계정={settings.database_user} 호스트={settings.database_host} DB={settings.database_name} "
+                f"| .env={settings.resolved_dotenv_files or '없음'}"
+            )
+            if using_password_no:
+                hint += (
+                    " | 현재 비밀번호가 비어 있습니다. .env 의 DATABASE_PASSWORD 를 설정하세요."
+                )
+            logger.error(hint)
+            raise RuntimeError(hint) from None
+        logger.exception(
+            "MySQL 연결 실패. 계정=%s 호스트=%s DB=%s | .env=%s",
+            settings.database_user,
+            settings.database_host,
+            settings.database_name,
+            settings.resolved_dotenv_files or "없음",
+        )
+        raise
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _sched
+    settings = Settings()
+    if settings.resolved_dotenv_files:
+        logger.info("로드된 .env 경로: %s", settings.resolved_dotenv_files)
+    else:
+        logger.warning(
+            ".env 없음—기대: %s",
+            settings.project_root / ".env",
+        )
+
+    _fail_fast_if_db_secret_missing(settings)
+    engine = create_engine_from_settings(settings)
+    _verify_mysql_or_raise(engine, settings)
+    logger.info("MySQL 연결 확인 완료")
+
+    session_factory = create_session_factory(engine)
+    app.state.settings = settings
+    app.state.session_factory = session_factory
+    _sched = start_weekly_pipeline_scheduler(settings, session_factory)
+    try:
+        yield
+    finally:
+        if _sched is not None:
+            _sched.shutdown(wait=False)
+        engine.dispose()
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="파이프라인·통계 MVP", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def _log_request_failures(request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception:
+            logger.exception("HTTP 요청 처리 중 예외 %s %s", request.method, request.url.path)
+            raise
+
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.include_router(dashboard.router)
+    app.include_router(health.router)
+    app.include_router(pipeline.router)
+    return app
+
+
+app = create_app()

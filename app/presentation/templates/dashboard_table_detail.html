@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{ detail.table_name }} 상세 통계</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css" />
+  </head>
+  <body>
+    <header>
+      <h1>{{ detail.table_name }} 상세 통계</h1>
+      <p>
+        <a href="/dashboard/tables">테이블 통계 목록</a>
+        ·
+        <a href="/dashboard">대시보드</a>
+      </p>
+    </header>
+    <div class="grid">
+      <div class="card">
+        <h2>기본 지표</h2>
+        <p>전체 건수: <strong>{{ detail.total_count }}</strong></p>
+        <p>오늘 생성: <strong>{{ detail.today_count }}</strong></p>
+        <p>마지막 생성시각: <strong>{{ detail.last_created_at or "-" }}</strong></p>
+      </div>
+      <div class="card" style="grid-column: span 2;">
+        <h2>최근 14일 생성 건수</h2>
+        <div class="card__scroll">
+          <table class="league">
+            <tr><th>날짜</th><th>건수</th></tr>
+            {% for row in detail.recent_daily %}
+            <tr><td>{{ row.day }}</td><td class="money">{{ row.count }}</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+      <div class="card" style="grid-column: 1 / -1; min-height: auto;">
+        <h2>최근 20개 레코드</h2>
+        <div class="card__scroll">
+          <table class="league">
+            <tr>
+              {% for col in detail.columns %}
+              <th>{{ col }}</th>
+              {% endfor %}
+            </tr>
+            {% for row in detail.rows %}
+            <tr>
+              {% for col in detail.columns %}
+              <td>{{ row.get(col) }}</td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

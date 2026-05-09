@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>테이블별 통계</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css" />
+  </head>
+  <body>
+    <header>
+      <h1>테이블별 통계</h1>
+      <p><a href="/dashboard">대시보드로 돌아가기</a></p>
+    </header>
+    <div class="grid">
+      <div class="card" style="grid-column: 1 / -1; min-height: auto;">
+        <div class="card__scroll">
+          <table class="league">
+            <tr>
+              <th>테이블</th>
+              <th>전체 건수</th>
+              <th>오늘 생성</th>
+              <th>마지막 생성시각</th>
+              <th>상세</th>
+            </tr>
+            {% for row in stats.rows %}
+            <tr>
+              <td>{{ row.table_name }}</td>
+              <td class="money">{{ row.total_count }}</td>
+              <td class="money">{{ row.today_count }}</td>
+              <td>{{ row.last_created_at or "-" }}</td>
+              <td><a href="/dashboard/tables/{{ row.table_name }}">보기</a></td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

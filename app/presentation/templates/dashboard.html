@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>진료 운영 비즈니스 통계 대시보드</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>진료 운영 비즈니스 통계 대시보드</h1>
+      <p><a href="/dashboard/tables">테이블별 통계 보기</a></p>
+    </header>
+
+    <div id="dashErr" class="err err--hidden"></div>
+
+    <div class="grid" id="mainGrid">
+      <div class="card">
+        <h2 id="gaugeTitle">금년 목표 진행</h2>
+        <div id="cGauge" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2>월별 진료 건수</h2>
+        <div id="cVisitor" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2>진료유형별 비중</h2>
+        <div id="cPie" class="chart"></div>
+        <div class="pie-total" id="pieTotal"></div>
+      </div>
+
+      <div class="card card--league">
+        <h2>리그 테이블: 상위 진료과</h2>
+        <div class="card__scroll">
+          <table class="league" id="leagueTable"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>진료과별 생산량, 건수 기준</h2>
+        <div id="cBar" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2 id="kpiLabel">추정 매출</h2>
+        <div class="kpi-num" id="kpiActual">—</div>
+        <div class="kpi-target">목표 <span id="kpiTarget">—</span></div>
+        <div class="growth" id="kpiGrowth">
+          <span>▲</span><span id="kpiPct">—</span>
+        </div>
+        <div id="cKpiSpark" class="chart--kpi-spark"></div>
+      </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+  </body>
+</html>
