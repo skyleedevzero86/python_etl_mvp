@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>테이블별 통계</title>
     <link rel="stylesheet" href="/static/css/dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   </head>
   <body>
     <header>
@@ -13,8 +14,15 @@
     </header>
     <div class="grid">
       <div class="card" style="grid-column: 1 / -1; min-height: auto;">
+        <h2>테이블별 전체 건수 및 오늘 생성</h2>
+        <div id="tableCountChart"></div>
+      </div>
+      <div class="card" style="grid-column: 1 / -1; min-height: auto;">
+        <div class="table-tools">
+          <input id="tableSearch" type="text" placeholder="테이블명 검색" />
+        </div>
         <div class="card__scroll">
-          <table class="league">
+          <table class="league" id="tableStats">
             <tr>
               <th>테이블</th>
               <th>전체 건수</th>
@@ -22,18 +30,95 @@
               <th>마지막 생성시각</th>
               <th>상세</th>
             </tr>
-            {% for row in stats.rows %}
-            <tr>
-              <td>{{ row.table_name }}</td>
-              <td class="money">{{ row.total_count }}</td>
-              <td class="money">{{ row.today_count }}</td>
-              <td>{{ row.last_created_at or "-" }}</td>
-              <td><a href="/dashboard/tables/{{ row.table_name }}">보기</a></td>
-            </tr>
-            {% endfor %}
+            <tbody id="tableStatsBody"></tbody>
           </table>
+        </div>
+        <div class="pager">
+          <button id="prevPageBtn" type="button">이전</button>
+          <span id="pageInfo"></span>
+          <button id="nextPageBtn" type="button">다음</button>
         </div>
       </div>
     </div>
+    <script>
+      (function () {
+        const rows = {{ chart_rows | tojson }};
+        const labels = rows.map((x) => x.table_name_kr);
+        const total = rows.map((x) => x.total_count);
+        const today = rows.map((x) => x.today_count);
+        const chart = echarts.init(document.getElementById("tableCountChart"));
+        chart.setOption({
+          tooltip: { trigger: "axis" },
+          legend: { data: ["전체 건수", "오늘 생성"] },
+          grid: { left: 56, right: 18, top: 30, bottom: 92 },
+          xAxis: {
+            type: "category",
+            data: labels,
+            axisLabel: { rotate: 35, interval: 0 },
+          },
+          yAxis: { type: "value", minInterval: 1 },
+          series: [
+            { name: "전체 건수", type: "bar", data: total },
+            { name: "오늘 생성", type: "bar", data: today },
+          ],
+        });
+        window.addEventListener("resize", function () {
+          chart.resize();
+        });
+
+        const pageSize = 5;
+        let page = 1;
+        const searchInput = document.getElementById("tableSearch");
+        const body = document.getElementById("tableStatsBody");
+        const pageInfo = document.getElementById("pageInfo");
+        const prevBtn = document.getElementById("prevPageBtn");
+        const nextBtn = document.getElementById("nextPageBtn");
+
+        function filteredRows() {
+          const q = (searchInput.value || "").trim().toLowerCase();
+          if (!q) return rows;
+          return rows.filter((r) =>
+            (r.table_name || "").toLowerCase().includes(q) ||
+            (r.table_name_kr || "").toLowerCase().includes(q)
+          );
+        }
+
+        function renderTable() {
+          const list = filteredRows();
+          const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+          if (page > totalPages) page = totalPages;
+          const start = (page - 1) * pageSize;
+          const current = list.slice(start, start + pageSize);
+          body.innerHTML = current.map((r) => (
+            "<tr>" +
+            "<td>" + r.table_name_kr + "</td>" +
+            "<td class='money'>" + r.total_count + "</td>" +
+            "<td class='money'>" + r.today_count + "</td>" +
+            "<td>" + (r.last_created_at || "-") + "</td>" +
+            "<td><a href='/dashboard/tables/" + r.table_name + "'>보기</a></td>" +
+            "</tr>"
+          )).join("");
+          pageInfo.textContent = page + " / " + totalPages;
+          prevBtn.disabled = page <= 1;
+          nextBtn.disabled = page >= totalPages;
+        }
+
+        searchInput.addEventListener("input", function () {
+          page = 1;
+          renderTable();
+        });
+        prevBtn.addEventListener("click", function () {
+          if (page > 1) {
+            page -= 1;
+            renderTable();
+          }
+        });
+        nextBtn.addEventListener("click", function () {
+          page += 1;
+          renderTable();
+        });
+        renderTable();
+      })();
+    </script>
   </body>
 </html>

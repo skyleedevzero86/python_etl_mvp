@@ -127,7 +127,7 @@ requirements.txt    Python 의존성
    pip install -r requirements.txt
    ```
 
-4. 저장소 **루트** 에 `.env` 를 만듭니다. `uvicorn` 실행 위치와 관계없이 `app/infrastructure/config.py` 기준 프로젝트 루트의 `.env` 를 읽습니다. 같은 이름이 실행 디렉터리에도 있으면 **루트 쪽 값이 우선**합니다. `DATABASE_USER` 가 `root` 가 아니면 `DATABASE_PASSWORD` 를 반드시 채웁니다. 비밀번호는 Git 에 올리지 않습니다. 샘플 데이터 적재를 막으려면 `ENABLE_PIPELINE_WRITE=false` 를 유지하고, 적재가 필요할 때만 `true` 로 바꿉니다.
+4. 저장소 **루트** 에 `.env` 를 만듭니다. `uvicorn` 실행 위치와 관계없이 `app/infrastructure/config.py` 기준 프로젝트 루트의 `.env` 를 읽습니다. 같은 이름이 실행 디렉터리에도 있으면 **루트 쪽 값이 우선**합니다. `DATABASE_USER` 가 `root` 가 아니면 `DATABASE_PASSWORD` 를 반드시 채웁니다. 비밀번호는 Git 에 올리지 않습니다.
 
 5. 최초 한 번 관리 계정으로 스키마를 적용합니다. 대상 호스트와 DB 이름은 환경에 맞게 바꿉니다.
 
