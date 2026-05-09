@@ -1,6 +1,6 @@
-from enum import StrEnum
+from enum import Enum
 
 
-class PipelineJob(StrEnum):
+class PipelineJob(str, Enum):
     INITIAL = "initial"
     COMPLETION = "completion"
