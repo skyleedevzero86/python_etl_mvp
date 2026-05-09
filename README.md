@@ -124,7 +124,10 @@ scripts/            스키마 적용 스크립트
 scripts/디비정리.sql MySQL DDL·주석 정리본
 scripts/디비정리PostgreSql.sql PostgreSQL DDL·주석 정리본
 requirements.txt    Python 의존성
+requirements-dev.txt 개발·테스트 의존성(pytest 등)
+tests/              pytest 단위 테스트
 .env.example        환경 변수 예시
+.github/workflows/  GitHub Actions CI
 ```
 
 ---
@@ -169,12 +172,19 @@ requirements.txt    Python 의존성
 uvicorn app.presentation.main:app --host 0.0.0.0 --port 8000 --workers 2
 ```
 
+### 테스트(DB 불필요)
+
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
+
 ## 참고 링크
 
-| 항목      | 경로 또는 URL 패턴         |
-| --------- | -------------------------- |
-| 헬스 확인 | `GET /health`              |
-| OpenAPI   | `/docs`, `/openapi.json`   |
-| 통계 JSON | `GET /api/dashboard/stats` |
-| 배치 로그 | `GET /api/dashboard/batch-job-logs` |
+| 항목        | 경로 또는 URL 패턴                             |
+| ----------- | ---------------------------------------------- |
+| 헬스 확인   | `GET /health`                                  |
+| OpenAPI     | `/docs`, `/openapi.json`                       |
+| 통계 JSON   | `GET /api/dashboard/stats`                     |
+| 배치 로그   | `GET /api/dashboard/batch-job-logs`            |
 | 실패 재처리 | `POST /api/dashboard/batch-job-logs/retry-due` |
