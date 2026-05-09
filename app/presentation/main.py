@@ -19,7 +19,11 @@ from sqlalchemy.exc import OperationalError
 from starlette.requests import Request
 
 from app.infrastructure.config import Settings
-from app.infrastructure.database import create_engine_from_settings, create_session_factory
+from app.infrastructure.database import (
+    create_engine_from_settings,
+    create_postgres_engine_from_settings,
+    create_session_factory,
+)
 from app.infrastructure.scheduler import start_weekly_pipeline_scheduler
 from app.presentation.routers import dashboard, health, pipeline
 
@@ -67,12 +71,18 @@ def _verify_mysql_or_raise(engine, settings: Settings) -> None:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
     except OperationalError as e:
+        logger.error(
+            "디비 접속 실패(MySQL). 디비에 문제가 있습니다. 계정=%s 호스트=%s 데이터베이스=%s",
+            settings.database_user,
+            settings.database_host,
+            settings.database_name,
+        )
         errno = _mysql_errno_from_operational_error(e)
         if errno == 1045:
             detail = str(getattr(e, "orig", e))
             using_password_no = "USING PASSWORD: NO" in detail.upper()
             hint = (
-                "MySQL 1045 인증 실패. 사용자/비밀번호 또는 host 권한을 확인하세요. "
+                "디비 접속 실패(MySQL). 디비에 문제가 있습니다. MySQL 1045 인증 실패. 사용자/비밀번호 또는 host 권한을 확인하세요. "
                 f"계정={settings.database_user} 호스트={settings.database_host} DB={settings.database_name} "
                 f"| .env={settings.resolved_dotenv_files or '없음'}"
             )
@@ -83,7 +93,7 @@ def _verify_mysql_or_raise(engine, settings: Settings) -> None:
             logger.error(hint)
             raise RuntimeError(hint) from None
         logger.exception(
-            "MySQL 연결 실패. 계정=%s 호스트=%s DB=%s | .env=%s",
+            "디비 접속 실패(MySQL). 디비에 문제가 있습니다. 계정=%s 호스트=%s DB=%s | .env=%s",
             settings.database_user,
             settings.database_host,
             settings.database_name,
@@ -109,9 +119,28 @@ async def lifespan(app: FastAPI):
     _verify_mysql_or_raise(engine, settings)
     logger.info("MySQL 연결 확인 완료")
 
+    postgres_engine = None
+    try:
+        postgres_engine = create_postgres_engine_from_settings(settings)
+        with postgres_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("PostgreSQL 연결 확인 완료")
+    except Exception as exc:
+        logger.error(
+            "디비 접속 실패(PostgreSQL). 디비에 문제가 있습니다. 호스트=%s 포트=%s 데이터베이스=%s 원인=%s",
+            settings.database_host,
+            settings.postgres_port,
+            settings.database_name,
+            exc,
+        )
+        if postgres_engine is not None:
+            postgres_engine.dispose()
+            postgres_engine = None
+
     session_factory = create_session_factory(engine)
     app.state.settings = settings
     app.state.session_factory = session_factory
+    app.state.postgres_engine = postgres_engine
     _sched = start_weekly_pipeline_scheduler(settings, session_factory)
     try:
         yield
@@ -119,6 +148,9 @@ async def lifespan(app: FastAPI):
         if _sched is not None:
             _sched.shutdown(wait=False)
         engine.dispose()
+        pe = getattr(app.state, "postgres_engine", None)
+        if pe is not None:
+            pe.dispose()
 
 
 def create_app() -> FastAPI:

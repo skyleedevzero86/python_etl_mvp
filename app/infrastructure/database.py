@@ -15,3 +15,11 @@ def create_engine_from_settings(settings: Settings) -> Engine:
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+def create_postgres_engine_from_settings(settings: Settings) -> Engine:
+    return create_engine(
+        settings.postgres_database_url,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )

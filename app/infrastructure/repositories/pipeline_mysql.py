@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from random import choice, randint
 from typing import Any
 
 from sqlalchemy import text
@@ -14,8 +15,9 @@ def _utc_now() -> datetime:
 
 
 class MysqlPipelineRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, daily_rows: int = 1000) -> None:
         self._session = session
+        self._daily_rows = max(1, int(daily_rows))
 
     def run_job(self, job: PipelineJob) -> dict:
         now = _utc_now()
@@ -28,7 +30,7 @@ class MysqlPipelineRepository:
         return int(row.m) + 1
 
     def _initial(self, now: datetime) -> dict[Any, Any]:
-        suffix = now.strftime("%Y%m%d%H%M")
+        suffix = now.strftime("%Y%m%d%H%M%S") + f"{randint(10, 99)}"
         dept_rows = (
             ("D" + suffix, "내과" + suffix[:4], None, "CLINICAL", now, now, _INTT),
             ("D2" + suffix, "외과" + suffix[:4], None, "SURGICAL", now, now, _INTT),
@@ -74,19 +76,22 @@ class MysqlPipelineRepository:
             ],
         )
         base = self._next_patient_no()
+        patient_count = self._daily_rows
         patient_rows = []
-        for i, pn in enumerate((base, base + 1)):
-            rrn = f"900101-{1000000 + int(suffix[-6:]) + i}"
+        for i in range(patient_count):
+            pn = base + i
+            rrn = f"900101-{(pn % 10_000_000):07d}"
+            gender = choice(("M", "F"))
             patient_rows.append(
                 dict(
                     pn=pn,
                     name=f"배치초기{i}",
                     rrn=rrn,
-                    g="M" if i == 0 else "F",
+                    g=gender,
                     birth="1990-01-01",
                     addr="SEOUL",
-                    email=f"p{suffix}_{i}@pipeline.local",
-                    tel=f"010{suffix}{i}"[:20],
+                    email=f"p{pn}@pipeline.local",
+                    tel=f"010{pn:08d}",
                     lm=now,
                     cd=now,
                     i=_INTT,
@@ -151,11 +156,12 @@ class MysqlPipelineRepository:
         return {
             "job": PipelineJob.INITIAL.value,
             "patients_inserted_from": base,
+            "patients_inserted_count": patient_count,
             "suffix": suffix,
         }
 
     def _completion(self, now: datetime) -> dict[Any, Any]:
-        suffix = now.strftime("%Y%m%d%H%M")
+        suffix = now.strftime("%Y%m%d%H%M%S") + f"{randint(10, 99)}"
 
         dept = self._session.execute(
             text("SELECT id FROM department ORDER BY id DESC LIMIT 1")
@@ -167,15 +173,13 @@ class MysqlPipelineRepository:
                 """
                 SELECT patient_no FROM Patient
                 ORDER BY patient_no DESC
-                LIMIT 2
+                LIMIT :limit_rows
                 """
-            )
+            ),
+            {"limit_rows": self._daily_rows},
         ).all()
         if len(patients) < 2:
             raise RuntimeError("완료 계열 배치는 환자가 둘 이상 있어야 합니다. 초기 배치를 먼저 실행하세요.")
-
-        pn_ok = int(patients[0][0])
-        pn_fail = int(patients[1][0])
 
         doc_id = 900001
 
@@ -201,8 +205,6 @@ class MysqlPipelineRepository:
             rid = self._session.execute(text("SELECT LAST_INSERT_ID() AS id")).scalar_one()
             return int(rid)
 
-        cid_completed = ins_check(pn_ok, "COMPLETED")
-        cid_failed = ins_check(pn_fail, "CANCELLED")
 
         def ins_treatment(
             pn: int,
@@ -238,28 +240,34 @@ class MysqlPipelineRepository:
             tid = self._session.execute(text("SELECT LAST_INSERT_ID() AS id")).scalar_one()
             return int(tid)
 
-        tid_ok = ins_treatment(pn_ok, cid_completed, "COMPLETED")
-        tid_fail = ins_treatment(pn_fail, cid_failed, "CANCELLED")
-
-        self._session.execute(
-            text(
-                """
-                INSERT INTO Out_Treatments (treatment_id, checkIn_id, treatment_status,
-                    pre_treatment_id, treatment_comment, created_date, last_modified_date, intt_cd)
-                VALUES (:tid, :cid, :st, NULL, :cm, :cd, :lm, :i)
-                """
-            ),
-            [
-                dict(tid=tid_ok, cid=cid_completed, st="COMPLETED", cm=None, cd=now, lm=now, i=_INTT),
-                dict(tid=tid_fail, cid=cid_failed, st="CANCELLED", cm="실패종료-" + suffix, cd=now, lm=now, i=_INTT),
-            ],
-        )
-
+        out_rows = []
         presc_rows = []
-        for tid, pn, pst in (
-            (tid_ok, pn_ok, "DISPENSED"),
-            (tid_fail, pn_fail, "CANCELLED"),
-        ):
+        completed_count = 0
+        cancelled_count = 0
+        for row in patients:
+            pn = int(row[0])
+            status = "COMPLETED" if randint(1, 100) <= 70 else "CANCELLED"
+            if status == "COMPLETED":
+                completed_count += 1
+            else:
+                cancelled_count += 1
+
+            cid = ins_check(pn, status)
+            tid = ins_treatment(pn, cid, status)
+
+            out_rows.append(
+                dict(
+                    tid=tid,
+                    cid=cid,
+                    st=status,
+                    cm=None if status == "COMPLETED" else "종료-" + suffix,
+                    cd=now,
+                    lm=now,
+                    i=_INTT,
+                )
+            )
+
+            pst = "DISPENSED" if status == "COMPLETED" else "CANCELLED"
             self._session.execute(
                 text(
                     """
@@ -284,10 +292,22 @@ class MysqlPipelineRepository:
             pid = self._session.execute(text("SELECT LAST_INSERT_ID() AS id")).scalar_one()
             presc_rows.append(int(pid))
 
+        self._session.execute(
+            text(
+                """
+                INSERT INTO Out_Treatments (treatment_id, checkIn_id, treatment_status,
+                    pre_treatment_id, treatment_comment, created_date, last_modified_date, intt_cd)
+                VALUES (:tid, :cid, :st, NULL, :cm, :cd, :lm, :i)
+                """
+            ),
+            out_rows,
+        )
+
         return {
             "job": PipelineJob.COMPLETION.value,
-            "check_ins": {"completed": cid_completed, "failed_flow": cid_failed},
-            "treatments": {"completed": tid_ok, "failed": tid_fail},
+            "check_ins": {"completed_count": completed_count, "cancelled_count": cancelled_count},
+            "treatments": {"completed_count": completed_count, "cancelled_count": cancelled_count},
+            "completion_rows": len(patients),
             "prescription_ids": presc_rows,
             "suffix": suffix,
         }

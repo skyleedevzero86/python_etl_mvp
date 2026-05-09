@@ -148,6 +148,12 @@ _COLUMN_NAME_KR = {
     "benefit_fee": "급여비",
     "patient_count": "환자 수",
     "treatment_count": "진료 건수",
+    "user_id": "사용자 아이디",
+    "doctorTreatment_id": "의사 진료 아이디",
+    "doctorTreatment_starttime": "의사 진료 시작시각",
+    "doctorTreatment_endtime": "의사 진료 종료시각",
+    "pre_treatment_id": "이전 진료 아이디",
+    "guardian": "보호자",
 }
 _VALUE_KR = {
     "OUTPATIENT": "외래",
@@ -182,12 +188,26 @@ def _column_label_kr(col: str) -> str:
         return "항목"
     low = c.lower()
     if low.endswith("_id") or low == "id":
-        return c.replace("_", " ") + " 아이디"
+        return "식별자"
+    if low.endswith("_no"):
+        return "번호"
+    if low.endswith("_yn"):
+        return "여부"
+    if low.endswith("_cd") or "code" in low:
+        return "코드"
     if "status" in low:
-        return c.replace("_", " ") + " 상태"
+        return "상태"
     if "date" in low or "time" in low:
-        return c.replace("_", " ") + " 일시"
-    return c.replace("_", " ")
+        return "일시"
+    if "name" in low:
+        return "명칭"
+    if "type" in low:
+        return "유형"
+    if "count" in low:
+        return "건수"
+    if "comment" in low or "memo" in low or "note" in low:
+        return "메모"
+    return "항목"
 
 
 @router.get("/", include_in_schema=False)
@@ -308,6 +328,7 @@ def dashboard_table_detail_page(
         raise HTTPException(status_code=404, detail=str(e))
     recent_daily_chart = [{"day": x.day, "count": x.count} for x in detail.recent_daily]
     column_label_kr = {col: _column_label_kr(col) for col in detail.columns}
+    column_headers_kr = [_column_label_kr(col) for col in detail.columns]
     return templates.TemplateResponse(
         request=request,
         name="dashboard_table_detail.html",
@@ -318,5 +339,6 @@ def dashboard_table_detail_page(
             "column_name_kr": _COLUMN_NAME_KR,
             "value_kr": _VALUE_KR,
             "column_label_kr": column_label_kr,
+            "column_headers_kr": column_headers_kr,
         },
     )

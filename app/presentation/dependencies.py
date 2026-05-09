@@ -29,9 +29,11 @@ def get_db(
 
 
 def get_pipeline_service(
+    request: Request,
     session: Annotated[Session, Depends(get_db)],
 ) -> PipelineApplicationService:
-    return PipelineApplicationService(MysqlPipelineRepository(session))
+    daily_rows = int(getattr(request.app.state.settings, "pipeline_daily_rows", 1000))
+    return PipelineApplicationService(MysqlPipelineRepository(session, daily_rows=daily_rows))
 
 
 def get_dashboard_service(

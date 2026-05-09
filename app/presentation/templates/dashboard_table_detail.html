@@ -40,8 +40,8 @@
         <div class="card__scroll">
           <table class="league">
             <tr>
-              {% for col in detail.columns %}
-              <th>{{ column_label_kr.get(col, "항목") }}</th>
+              {% for header in column_headers_kr %}
+              <th>{{ header }}</th>
               {% endfor %}
             </tr>
             {% for row in detail.rows %}

@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _run_job(factory: "sessionmaker[Session]", job: PipelineJob) -> None:
+def _run_job(factory: "sessionmaker[Session]", job: PipelineJob, daily_rows: int) -> None:
     session = factory()
     try:
-        repo = MysqlPipelineRepository(session)
+        repo = MysqlPipelineRepository(session, daily_rows=daily_rows)
         svc = PipelineApplicationService(repo)
         result = svc.execute(job)
         session.commit()
@@ -44,14 +44,14 @@ def start_weekly_pipeline_scheduler(
     sched.add_job(
         _run_job,
         CronTrigger(day_of_week=wd, hour=settings.scheduler_initial_hour, minute=0),
-        args=(session_factory, PipelineJob.INITIAL),
+        args=(session_factory, PipelineJob.INITIAL, settings.pipeline_daily_rows),
         id="pipeline_initial_weekly",
         replace_existing=True,
     )
     sched.add_job(
         _run_job,
         CronTrigger(day_of_week=wd, hour=settings.scheduler_completion_hour, minute=0),
-        args=(session_factory, PipelineJob.COMPLETION),
+        args=(session_factory, PipelineJob.COMPLETION, settings.pipeline_daily_rows),
         id="pipeline_completion_weekly",
         replace_existing=True,
     )

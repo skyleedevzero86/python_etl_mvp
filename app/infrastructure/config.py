@@ -9,11 +9,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _resolve_dotenv_paths() -> tuple[str, ...]:
-    ordered: list[Path] = [
-        _PROJECT_ROOT / ".env.example",
-        Path.cwd() / ".env",
-        _PROJECT_ROOT / ".env",
-    ]
+    ordered: list[Path] = [_PROJECT_ROOT / ".env.example"]
     seen: set[str] = set()
     out: list[str] = []
     for p in ordered:
@@ -46,14 +42,19 @@ class Settings(BaseSettings):
     database_host: str = "127.0.0.1"
     database_port: int = 3306
     database_name: str = "finsight2"
-    database_user: str = "finsight"
-    database_password: str = "root123"
+    database_user: str = ""
+    database_password: str = ""
 
-    scheduler_weekday: str = "mon"
+    scheduler_weekday: str = "mon-sun"
     scheduler_initial_hour: int = 9
-    scheduler_completion_hour: int = 16
+    scheduler_completion_hour: int = 18
+    pipeline_daily_rows: int = 1000
     enable_pipeline_write: bool = True
     enable_pipeline_scheduler: bool = True
+
+    postgres_port: int = 5433
+    postgres_user: str = "postgres"
+    postgres_password: str = "root1234"
 
     @model_validator(mode="after")
     def _warn_mysql_password_if_needed(self) -> "Settings":
@@ -84,4 +85,13 @@ class Settings(BaseSettings):
         return (
             f"mysql+pymysql://{user}:{pwd}"
             f"@{self.database_host}:{self.database_port}/{self.database_name}?charset=utf8mb4"
+        )
+
+    @property
+    def postgres_database_url(self) -> str:
+        user = quote_plus(self.postgres_user)
+        pwd = quote_plus(self.postgres_password)
+        return (
+            f"postgresql+psycopg2://{user}:{pwd}"
+            f"@{self.database_host}:{self.postgres_port}/{self.database_name}"
         )
