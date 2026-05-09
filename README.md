@@ -1,5 +1,12 @@
 # python_etl_mvp
 
+
+<img width="1435" height="893" alt="image" src="https://github.com/user-attachments/assets/cc391939-8d1d-4e89-9c61-43d27994d0d5" />
+<br/>
+<img width="1312" height="892" alt="image" src="https://github.com/user-attachments/assets/34fbdc1b-e38c-4cfc-89cd-48bb0d3d795c" />
+<br/>
+
+
 PostgreSQL 에서 MySQL 로 전환 연습과 OLAP 학습을 정리하기 위한 저장소입니다. <br/>
 FastAPI 기반으로 주간 배치 파이프라인, 통계 API, Jinja2 로 내려주는 대시보드 화면을 묶어 두었습니다.<br/>
 
