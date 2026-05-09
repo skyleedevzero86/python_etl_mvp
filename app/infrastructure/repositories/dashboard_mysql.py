@@ -1,4 +1,6 @@
+import hashlib
 from datetime import date
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -42,6 +44,103 @@ _TABLES = [
     "inpatient_statistics",
     "treatment_department_statistics",
 ]
+
+
+def _sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _mask_name(value: str) -> str:
+    v = value.strip()
+    if not v:
+        return value
+    if len(v) == 1:
+        return v + "*"
+    return v[0] + ("*" * (len(v) - 1))
+
+
+def _mask_rrn(value: str) -> str:
+    v = value.strip()
+    if not v:
+        return value
+    if len(v) >= 8:
+        return v[:8] + "******"
+    return v[0] + "******"
+
+
+def _mask_email(value: str) -> str:
+    v = value.strip()
+    if "@" not in v:
+        return _mask_name(v)
+    local, domain = v.split("@", 1)
+    if not local:
+        return "***@" + domain
+    return local[0] + "***@" + domain
+
+
+def _mask_phone(value: str) -> str:
+    v = value.strip()
+    if len(v) <= 4:
+        return "*" * len(v)
+    return v[:3] + "****" + v[-4:]
+
+
+def _mask_text(value: str) -> str:
+    v = value.strip()
+    if not v:
+        return value
+    if len(v) <= 2:
+        return v[0] + "*"
+    return v[:2] + "*" * (len(v) - 2)
+
+
+def _sanitize_row(table_name: str, row: dict[str, Any]) -> dict[str, Any]:
+    out = dict(row)
+    for key, raw in list(out.items()):
+        key_l = str(key).lower()
+        if key_l in {"patient_no", "patient_id", "doctor_id", "user_id", "treatment_doc"} and raw is not None:
+            raw_s = str(raw)
+            out[key] = "***" + raw_s[-2:] if len(raw_s) >= 2 else "***"
+            out[f"{key}_sha256"] = _sha256_text(raw_s)
+            continue
+        if not isinstance(raw, str):
+            continue
+        if key_l in {"patient_rrn", "rrn", "resident_no"}:
+            out[key] = _mask_rrn(raw)
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+        if key_l == "certificate_number":
+            out[key] = _mask_text(raw)
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+        if "name" in key_l and key_l not in {"department_name", "institution_name", "drug_name"}:
+            out[key] = _mask_name(raw)
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+        if "email" in key_l:
+            out[key] = _mask_email(raw)
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+        if key_l in {"patient_tel", "phone_number", "tel", "mobile"} or "phone" in key_l:
+            out[key] = _mask_phone(raw)
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+        if "passport" in key_l:
+            out[key] = "********"
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+        if key_l in {"patient_address", "address"}:
+            out[key] = (raw[:2] + "***") if raw else raw
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+        if "birth" in key_l:
+            out[key] = "****-**-**"
+            continue
+        if any(x in key_l for x in ("diagnosis", "finding", "purpose", "memo", "comment", "note")):
+            out[key] = _mask_text(raw)
+            out[f"{key}_sha256"] = _sha256_text(raw)
+            continue
+    return out
 
 
 def _recent_months(n: int) -> list[tuple[str, str]]:
@@ -146,7 +245,7 @@ class MysqlDashboardRepository:
         ).all()
         mapped_rows: list[dict] = []
         for r in sample_rows:
-            mapped_rows.append(dict(r._mapping))
+            mapped_rows.append(_sanitize_row(table_name, dict(r._mapping)))
         return TableDetailSnapshot(
             table_name=table_name,
             total_count=int(base.total_count or 0),

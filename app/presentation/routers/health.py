@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from app.domain.api_schema import HealthResponse
 
@@ -13,3 +13,8 @@ router = APIRouter(tags=["상태점검"])
 )
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@router.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+def chrome_devtools_probe() -> Response:
+    return Response(status_code=204)

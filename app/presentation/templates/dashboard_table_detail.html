@@ -3,12 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>{{ detail.table_name }} 상세 통계</title>
+    <title>{{ display_table_name }} 상세 통계</title>
     <link rel="stylesheet" href="/static/css/dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   </head>
   <body>
     <header>
-      <h1>{{ detail.table_name }} 상세 통계</h1>
+      <h1>{{ display_table_name }} 상세 통계</h1>
       <p>
         <a href="/dashboard/tables">테이블 통계 목록</a>
         ·
@@ -24,6 +25,7 @@
       </div>
       <div class="card" style="grid-column: span 2;">
         <h2>최근 14일 생성 건수</h2>
+        <div id="recentChart"></div>
         <div class="card__scroll">
           <table class="league">
             <tr><th>날짜</th><th>건수</th></tr>
@@ -39,13 +41,26 @@
           <table class="league">
             <tr>
               {% for col in detail.columns %}
-              <th>{{ col }}</th>
+              <th>{{ column_label_kr.get(col, "항목") }}</th>
               {% endfor %}
             </tr>
             {% for row in detail.rows %}
             <tr>
               {% for col in detail.columns %}
-              <td>{{ row.get(col) }}</td>
+              {% set value = row.get(col) %}
+              {% if col == "intt_cd" %}
+              {% if value is none or value == "" %}
+              <td>본원</td>
+              {% else %}
+              <td>{{ value_kr.get(value|string|upper, value_kr.get(value, value)) }}</td>
+              {% endif %}
+              {% else %}
+              {% if value is none or value == "" %}
+              <td>없음</td>
+              {% else %}
+              <td>{{ value_kr.get(value|string|upper, value_kr.get(value, value)) }}</td>
+              {% endif %}
+              {% endif %}
               {% endfor %}
             </tr>
             {% endfor %}
@@ -53,5 +68,32 @@
         </div>
       </div>
     </div>
+    <script>
+      (function () {
+        const labels = [{% for row in detail.recent_daily %}"{{ row.day }}"{% if not loop.last %}, {% endif %}{% endfor %}];
+        const values = [{% for row in detail.recent_daily %}{{ row.count }}{% if not loop.last %}, {% endif %}{% endfor %}];
+        const chart = echarts.init(document.getElementById("recentChart"));
+        chart.setOption({
+          grid: { left: 40, right: 18, top: 18, bottom: 30 },
+          tooltip: { trigger: "axis" },
+          xAxis: { type: "category", data: labels },
+          yAxis: { type: "value", minInterval: 1 },
+          series: [
+            {
+              type: "line",
+              smooth: true,
+              symbolSize: 7,
+              lineStyle: { width: 2, color: "#2563eb" },
+              itemStyle: { color: "#2563eb" },
+              areaStyle: { color: "rgba(37, 99, 235, 0.15)" },
+              data: values,
+            },
+          ],
+        });
+        window.addEventListener("resize", function () {
+          chart.resize();
+        });
+      })();
+    </script>
   </body>
 </html>
