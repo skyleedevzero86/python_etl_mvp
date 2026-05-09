@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from random import choice, randint
 from typing import Any
 
@@ -11,7 +11,7 @@ _INTT = "PIPELINE"
 
 
 def _utc_now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class MysqlPipelineRepository:
