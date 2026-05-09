@@ -24,8 +24,8 @@ from app.infrastructure.database import (
     create_postgres_engine_from_settings,
     create_session_factory,
 )
-from app.infrastructure.scheduler import start_weekly_pipeline_scheduler
-from app.presentation.routers import dashboard, health, pipeline
+from app.infrastructure.scheduler import start_background_scheduler
+from app.presentation.routers import dashboard, health, pg_my_health, pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -126,11 +126,15 @@ async def lifespan(app: FastAPI):
             conn.execute(text("SELECT 1"))
         logger.info("PostgreSQL 연결 확인 완료")
     except Exception as exc:
+        pg_db = settings.postgres_database or settings.database_name
         logger.error(
-            "디비 접속 실패(PostgreSQL). 디비에 문제가 있습니다. 호스트=%s 포트=%s 데이터베이스=%s 원인=%s",
+            "디비 접속 실패(PostgreSQL). 호스트=%s 포트=%s 데이터베이스=%s 사용자=%s — "
+            "서버 기동 여부, 방화벽, 해당 DB 생성(CREATE DATABASE), 스키마 적용(디비정리PostgreSql.sql), "
+            "포트(도커 기본 5432 vs 설정 POSTGRES_PORT)를 확인하세요. 원인=%s",
             settings.database_host,
             settings.postgres_port,
-            settings.database_name,
+            pg_db,
+            settings.postgres_user,
             exc,
         )
         if postgres_engine is not None:
@@ -141,7 +145,7 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.postgres_engine = postgres_engine
-    _sched = start_weekly_pipeline_scheduler(settings, session_factory)
+    _sched = start_background_scheduler(settings, session_factory, postgres_engine)
     try:
         yield
     finally:
@@ -181,6 +185,7 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.include_router(dashboard.router)
     app.include_router(health.router)
+    app.include_router(pg_my_health.router)
     app.include_router(pipeline.router)
     return app
 

@@ -2,14 +2,17 @@ import logging
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _resolve_dotenv_paths() -> tuple[str, ...]:
-    ordered: list[Path] = [_PROJECT_ROOT / ".env.example"]
+    ordered: list[Path] = [
+        _PROJECT_ROOT / ".env.example",
+        _PROJECT_ROOT / ".env",
+    ]
     seen: set[str] = set()
     out: list[str] = []
     for p in ordered:
@@ -52,9 +55,19 @@ class Settings(BaseSettings):
     enable_pipeline_write: bool = True
     enable_pipeline_scheduler: bool = True
 
+    enable_etl_scheduler: bool = True
+    etl_wearable_start_hour: int = 6
+    etl_wearable_end_hour: int = 9
+    etl_postgres_to_mysql_hour: int = 10
+    etl_mysql_to_postgres_hour: int = 16
+
     postgres_port: int = 5433
     postgres_user: str = "postgres"
     postgres_password: str = "root1234"
+    postgres_database: str | None = Field(
+        default=None,
+        description="PostgreSQL 전용 DB 이름. 비우면 database_name 과 동일하게 연결합니다.",
+    )
 
     @model_validator(mode="after")
     def _warn_mysql_password_if_needed(self) -> "Settings":
@@ -91,7 +104,8 @@ class Settings(BaseSettings):
     def postgres_database_url(self) -> str:
         user = quote_plus(self.postgres_user)
         pwd = quote_plus(self.postgres_password)
+        pg_db = self.postgres_database or self.database_name
         return (
             f"postgresql+psycopg2://{user}:{pwd}"
-            f"@{self.database_host}:{self.postgres_port}/{self.database_name}"
+            f"@{self.database_host}:{self.postgres_port}/{pg_db}"
         )

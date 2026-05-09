@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PostgreSQL 데이터 · 진료 운영 대시보드</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  </head>
+  <body class="pg-full-page">
+    <header>
+      <h1>PostgreSQL 데이터</h1>
+      <nav class="site-nav">
+        <a href="/dashboard">메인 대시보드</a>
+        <span class="site-nav__sep">·</span>
+        <a href="/dashboard/tables">MySQL 테이블 통계</a>
+      </nav>
+    </header>
+
+    <div id="pgErr" class="err err--hidden" style="max-width: 1280px; margin: 0 auto 12px"></div>
+
+    <div class="grid" id="pgRoot" style="grid-template-columns: 1fr">
+      <div class="card" style="grid-column: 1 / -1; min-height: auto">
+        <h2>요약 KPI</h2>
+        <div id="pgKpiRow" class="pg-kpi-row"></div>
+        <p class="pg-muted" id="pgMeta"></p>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1; min-height: 320px">
+        <h2>테이블별 건수</h2>
+        <div id="pgTableBar" class="chart" style="min-height: 300px"></div>
+      </div>
+
+      <div class="card">
+        <h2>진료 이벤트 유형 비중</h2>
+        <div id="pgClinicalPie" class="chart" style="min-height: 260px"></div>
+      </div>
+
+      <div class="card">
+        <h2>진료 이벤트 유형별 건수</h2>
+        <div class="card__scroll pg-table-wrap" style="max-height: 280px">
+          <table class="league" id="pgClinicalTable"></table>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1; min-height: auto">
+        <h2>최근 생체 측정</h2>
+        <div class="card__scroll pg-table-wrap" style="max-height: 340px">
+          <table class="league" id="pgVitalsTable"></table>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1; min-height: auto">
+        <h2>일별 웰니스 샘플</h2>
+        <div class="card__scroll pg-table-wrap" style="max-height: 260px">
+          <table class="league" id="pgWellnessTable"></table>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1; min-height: auto">
+        <h2>진료·검사 타임라인</h2>
+        <div class="card__scroll pg-table-wrap" style="max-height: 360px">
+          <table class="league" id="pgEventsTable"></table>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="pgPatientModal"
+      class="pg-modal pg-modal--hidden"
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="pg-modal__backdrop"></div>
+      <div class="pg-modal__dialog">
+        <button
+          type="button"
+          id="pgPatientModalClose"
+          class="pg-modal__close"
+          aria-label="닫기"
+        >
+          ×
+        </button>
+        <div id="pgPatientModalBody"></div>
+      </div>
+    </div>
+
+    <script src="/static/js/pg_modal_sync.js"></script>
+    <script src="/static/js/dashboard_postgresql.js"></script>
+  </body>
+</html>

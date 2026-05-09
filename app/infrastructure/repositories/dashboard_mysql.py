@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.domain.datetime_display import format_datetime_kr, map_row_datetimes_to_kr
 from app.domain.dashboard_schema import (
     DailyCount,
     DashboardSnapshot,
@@ -195,7 +196,7 @@ class MysqlDashboardRepository:
                     total_count=int(row.total_count or 0),
                     today_count=int(row.today_count or 0),
                     last_created_at=(
-                        row.last_created_at.isoformat(sep=" ", timespec="seconds")
+                        format_datetime_kr(row.last_created_at)
                         if row.last_created_at is not None
                         else None
                     ),
@@ -245,13 +246,15 @@ class MysqlDashboardRepository:
         ).all()
         mapped_rows: list[dict] = []
         for r in sample_rows:
-            mapped_rows.append(_sanitize_row(table_name, dict(r._mapping)))
+            mapped_rows.append(
+                map_row_datetimes_to_kr(_sanitize_row(table_name, dict(r._mapping))),
+            )
         return TableDetailSnapshot(
             table_name=table_name,
             total_count=int(base.total_count or 0),
             today_count=int(base.today_count or 0),
             last_created_at=(
-                base.last_created_at.isoformat(sep=" ", timespec="seconds")
+                format_datetime_kr(base.last_created_at)
                 if base.last_created_at is not None
                 else None
             ),

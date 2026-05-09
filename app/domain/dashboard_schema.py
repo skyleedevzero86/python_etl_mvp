@@ -69,3 +69,52 @@ class TableDetailSnapshot(BaseModel):
     recent_daily: list[DailyCount] = Field(default_factory=list, description="최근 14일 생성 추이")
     columns: list[str] = Field(default_factory=list, description="표 컬럼 목록")
     rows: list[dict] = Field(default_factory=list, description="최근 레코드 목록")
+
+
+class PgTableCountRow(BaseModel):
+    table_key: str = Field(description="논리 키")
+    sql_name: str = Field(description="스키마 테이블명")
+    label_kr: str = Field(description="한글 설명")
+    total_count: int = Field(description="전체 건수 (-1 이면 조회 실패)")
+
+
+class PgEtlState(BaseModel):
+    wearable_round_robin_cursor: int | None = Field(default=None, description="웨어러블 라운드로빈 커서")
+    wearable_updated_at: str | None = Field(default=None, description="커서 갱신 시각")
+
+
+class PgCategoryCount(BaseModel):
+    category: str = Field(description="진료 이벤트 유형 코드")
+    label_kr: str = Field(description="진료 이벤트 유형 한글 라벨")
+    count: int = Field(description="건수")
+
+
+class PgVitalsAggregate(BaseModel):
+    total_vitals: int = Field(default=0, description="생체 측정 총건수")
+    today_vitals: int = Field(default=0, description="금일 측정 건수")
+    pending_mysql_sync: int = Field(default=0, description="MySQL 미동기화 생체 건수")
+    pending_daily_mysql_sync: int = Field(default=0, description="MySQL 미동기화 일별 웰니스 행 수")
+    avg_heart_rate_24h: float | None = Field(default=None, description="최근 24시간 평균 심박")
+
+
+class PgDashboardSnapshot(BaseModel):
+    connected: bool = Field(description="PostgreSQL 연결 여부")
+    message: str | None = Field(default=None, description="연결 불가 시 안내")
+    generated_at: str = Field(description="집계 시각")
+    include_mysql_treatment_id_column: bool = Field(
+        default=False,
+        description="최근 진료 이벤트에 MySQL 진료 ID가 하나라도 있으면 true",
+    )
+    table_counts: list[PgTableCountRow] = Field(default_factory=list, description="테이블별 건수")
+    etl: PgEtlState | None = Field(default=None, description="ETL 커서")
+    clinical_by_category: list[PgCategoryCount] = Field(
+        default_factory=list,
+        description="patient_clinical_event 유형별 건수",
+    )
+    vitals_aggregate: PgVitalsAggregate = Field(default_factory=PgVitalsAggregate)
+    recent_vitals: list[dict] = Field(default_factory=list, description="최근 생체 측정")
+    recent_clinical_events: list[dict] = Field(default_factory=list, description="최근 진료 이벤트")
+    daily_wellness_sample_rows: list[dict] = Field(
+        default_factory=list,
+        description="일별 웰니스 최근 샘플",
+    )

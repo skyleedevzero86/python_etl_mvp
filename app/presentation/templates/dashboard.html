@@ -10,7 +10,11 @@
   <body>
     <header>
       <h1>진료 운영 비즈니스 통계 대시보드</h1>
-      <p><a href="/dashboard/tables">테이블별 통계 보기</a></p>
+      <nav class="site-nav">
+        <a href="/dashboard/tables">MySQL 테이블 통계</a>
+        <span class="site-nav__sep">·</span>
+        <a href="/dashboard/postgresql">PostgreSQL 데이터</a>
+      </nav>
     </header>
 
     <div id="dashErr" class="err err--hidden"></div>
@@ -51,6 +55,41 @@
       </div>
     </div>
 
+    <section class="pg-panel" aria-labelledby="pgPanelTitle">
+      <div class="pg-panel__head">
+        <div class="pg-panel__head-text">
+          <h2 id="pgPanelTitle">PostgreSQL 데이터 통계</h2>
+          <p class="pg-panel__sub">
+            앱·웨어러블·진료 타임라인·ETL 동기화 상태 (실시간 집계)
+          </p>
+        </div>
+      </div>
+      <div id="pgPanelErr" class="err err--hidden"></div>
+      <div id="pgPanelInner" class="pg-panel__inner"></div>
+    </section>
+
+    <div
+      id="pgPatientModal"
+      class="pg-modal pg-modal--hidden"
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="pg-modal__backdrop"></div>
+      <div class="pg-modal__dialog">
+        <button
+          type="button"
+          id="pgPatientModalClose"
+          class="pg-modal__close"
+          aria-label="닫기"
+        >
+          ×
+        </button>
+        <div id="pgPatientModalBody"></div>
+      </div>
+    </div>
+
+    <script src="/static/js/pg_modal_sync.js"></script>
     <script src="/static/js/dashboard.js"></script>
   </body>
 </html>

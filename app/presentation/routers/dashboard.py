@@ -1,14 +1,27 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path as ApiPath, Request
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app.domain.datetime_display import cell_value_display
 from app.application.dashboard_service import DashboardApplicationService
-from app.domain.dashboard_schema import DashboardSnapshot, TableDetailSnapshot, TableStatsSnapshot
-from app.presentation.dependencies import get_dashboard_service
+from app.application.etl_service import EtlApplicationService
+from app.domain.display_labels import CLINICAL_CATEGORY_CODE_KR, STATUS_CODE_KR
+from app.domain.dashboard_schema import (
+    DashboardSnapshot,
+    PgDashboardSnapshot,
+    TableDetailSnapshot,
+    TableStatsSnapshot,
+)
+from app.infrastructure.repositories.dashboard_mysql import _sanitize_row
+from app.infrastructure.repositories.dashboard_postgres import PostgresDashboardRepository
+from app.infrastructure.repositories.etl_sync_repository import EtlSyncRepository
+from app.presentation.dependencies import get_dashboard_service, get_db
 
 router = APIRouter(tags=["대시보드"])
 
@@ -156,21 +169,8 @@ _COLUMN_NAME_KR = {
     "guardian": "보호자",
 }
 _VALUE_KR = {
-    "OUTPATIENT": "외래",
-    "INPATIENT": "입원",
-    "EMERGENCY": "응급",
-    "COMPLETED": "완료",
-    "CANCELLED": "취소",
-    "IN_PROGRESS": "진행중",
-    "WAITING": "대기",
-    "CONFIRMED": "확정",
-    "DISPENSED": "조제완료",
-    "ISSUED": "발급",
-    "CLINICAL": "임상",
-    "SURGICAL": "외과",
-    "IMAGING": "영상",
-    "LAB": "검사실",
-    "ULTRASOUND": "초음파",
+    **STATUS_CODE_KR,
+    **CLINICAL_CATEGORY_CODE_KR,
     "M": "남",
     "F": "여",
     "Y": "예",
@@ -227,6 +227,94 @@ def dashboard_page(request: Request) -> HTMLResponse:
         name="dashboard.html",
         context={},
     )
+
+
+@router.get(
+    "/dashboard/postgresql",
+    response_class=HTMLResponse,
+    summary="PostgreSQL 데이터 대시보드",
+    description="PostgreSQL 테이블 건수·ETL·생체·진료 이벤트를 상세 표와 차트로 표시합니다.",
+)
+def dashboard_postgresql_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_postgresql.html",
+        context={},
+    )
+
+
+@router.get(
+    "/api/dashboard/postgresql-stats",
+    response_model=PgDashboardSnapshot,
+    summary="PostgreSQL 집계 JSON",
+    description="디비정리PostgreSql 스키마 기준 테이블 건수·요약·최근 행을 반환합니다.",
+)
+def dashboard_postgresql_stats_json(request: Request) -> PgDashboardSnapshot:
+    eng = getattr(request.app.state, "postgres_engine", None)
+    return PostgresDashboardRepository(eng).fetch_snapshot()
+
+
+def _serialize_masked_row(row: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for k, v in row.items():
+        if str(k).endswith("_sha256"):
+            continue
+        out[k] = cell_value_display(v)
+    return out
+
+
+@router.get(
+    "/api/dashboard/pg-patient/{patient_no}",
+    summary="PostgreSQL 환자 요약(대시보드)",
+)
+def dashboard_pg_patient_detail(
+    request: Request,
+    patient_no: Annotated[int, ApiPath(description="환자번호", ge=1)],
+) -> dict[str, Any]:
+    eng = getattr(request.app.state, "postgres_engine", None)
+    if eng is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL 연결이 없습니다.")
+    with eng.connect() as conn:
+        prow = conn.execute(
+            text(
+                'SELECT patient_no, patient_name, patient_rrn, patient_gender, patient_birth, '
+                'patient_address, patient_email, patient_tel, patient_foreign, patient_passport, '
+                'patient_hypass_YN, patient_last_visit, guardian, created_date, last_modified_date, intt_cd '
+                'FROM "Patient" WHERE patient_no = :p'
+            ),
+            {"p": patient_no},
+        ).mappings().first()
+        if not prow:
+            raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다.")
+        patient = _serialize_masked_row(_sanitize_row("Patient", dict(prow)))
+        prof_row = conn.execute(
+            text(
+                "SELECT patient_no, app_user_id, blood_type, height_cm, weight_kg, "
+                "created_date, last_modified_date, intt_cd FROM user_app_profile WHERE patient_no = :p"
+            ),
+            {"p": patient_no},
+        ).mappings().first()
+        profile = (
+            _serialize_masked_row(_sanitize_row("user_app_profile", dict(prof_row)))
+            if prof_row
+            else None
+        )
+    return {"patient": patient, "profile": profile}
+
+
+@router.post(
+    "/api/dashboard/etl/sync-postgres-to-mysql",
+    summary="PostgreSQL → MySQL 동기화 수동 실행",
+)
+def dashboard_etl_sync_pg_to_mysql(
+    request: Request,
+    session: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    pg = getattr(request.app.state, "postgres_engine", None)
+    if pg is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL 연결이 없습니다.")
+    repo = EtlSyncRepository(session, pg)
+    return EtlApplicationService(repo).sync_postgres_to_mysql()
 
 
 @router.get(

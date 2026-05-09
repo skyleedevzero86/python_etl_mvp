@@ -78,6 +78,58 @@ CREATE TABLE Patient (
 
 
 /* =====================================================================
+ 2-1. 앱·웨어러블 미러 (PostgreSQL 동기화 대상, ETL 10시 적재)
+ ===================================================================== */
+
+CREATE TABLE user_app_profile (
+    patient_no        BIGINT        NOT NULL                COMMENT '환자번호 Patient FK',
+    app_user_id       VARCHAR(32)   NULL                    COMMENT '앱 사용자 ID',
+    blood_type        VARCHAR(10)   NULL                    COMMENT '혈액형',
+    height_cm         DECIMAL(5,1)  NULL                    COMMENT '키 cm',
+    weight_kg         DECIMAL(5,1)  NULL                    COMMENT '몸무게 kg',
+    created_date      DATETIME      NULL                    COMMENT '생성일시',
+    last_modified_date DATETIME     NULL                    COMMENT '수정일시',
+    intt_cd           VARCHAR(10)   NULL                    COMMENT '기관 코드',
+    PRIMARY KEY (patient_no),
+    CONSTRAINT fk_user_app_profile_patient FOREIGN KEY (patient_no) REFERENCES Patient(patient_no)
+) COMMENT='앱·웨어러블 확장 프로필 PostgreSQL 미러';
+
+
+CREATE TABLE wearable_vital (
+    vital_id                   BIGINT        NOT NULL AUTO_INCREMENT COMMENT '측정 PK',
+    patient_no                 BIGINT        NOT NULL                COMMENT '환자번호',
+    measured_at                DATETIME      NOT NULL                COMMENT '측정 시각',
+    heart_rate_bpm             INT           NULL                    COMMENT '심박',
+    blood_pressure_systolic    INT           NULL                    COMMENT '수축기',
+    blood_pressure_diastolic   INT           NULL                    COMMENT '이완기',
+    body_temp_c                DECIMAL(4,1)  NULL                    COMMENT '체온',
+    stress_score               DECIMAL(6,2)  NULL                    COMMENT '스트레스',
+    source_channel             VARCHAR(32)   NULL                    COMMENT '출처 wearable/app',
+    created_date               DATETIME      NULL                    COMMENT '적재일시',
+    intt_cd                    VARCHAR(10)   NULL                    COMMENT '기관 코드',
+    PRIMARY KEY (vital_id),
+    UNIQUE KEY uk_wearable_patient_measured (patient_no, measured_at),
+    KEY idx_wearable_patient (patient_no),
+    CONSTRAINT fk_wearable_vital_patient FOREIGN KEY (patient_no) REFERENCES Patient(patient_no)
+) COMMENT='웨어러블 생체 측정 PostgreSQL→MySQL 적재';
+
+
+CREATE TABLE wearable_daily_wellness (
+    patient_no       BIGINT        NOT NULL                COMMENT '환자번호',
+    summary_date     DATE          NOT NULL                COMMENT '기준일',
+    step_count       INT           NOT NULL DEFAULT 0       COMMENT '걸음 수',
+    step_goal        INT           NOT NULL DEFAULT 1000    COMMENT '목표 걸음',
+    sleep_hours      DECIMAL(4,1)  NULL                    COMMENT '수면 시간',
+    stress_level     DECIMAL(6,2)  NULL                    COMMENT '스트레스 요약',
+    created_date     DATETIME      NULL                    COMMENT '생성일시',
+    last_modified_date DATETIME    NULL                    COMMENT '수정일시',
+    intt_cd          VARCHAR(10)   NULL                    COMMENT '기관 코드',
+    PRIMARY KEY (patient_no, summary_date),
+    CONSTRAINT fk_wearable_daily_patient FOREIGN KEY (patient_no) REFERENCES Patient(patient_no)
+) COMMENT='일별 웰니스 PostgreSQL→MySQL 적재';
+
+
+/* =====================================================================
  3. 진료 흐름 영역, 임상 패키지
  ===================================================================== */
 
@@ -134,6 +186,7 @@ CREATE TABLE treatments (
     treatment_end_time   DATETIME      NULL                    COMMENT '진료 종료 시각',
     treatment_comment    TEXT          NULL                    COMMENT '진료 소견/메모',
     treatment_dept       VARCHAR(100)  NULL                    COMMENT '진료과명 캐싱 department.name 스냅샷',
+    synced_to_postgres_at DATETIME     NULL                    COMMENT 'PostgreSQL patient_clinical_event 반영 시각 ETL',
     created_date         DATETIME      NULL                    COMMENT '생성일시',
     last_modified_date   DATETIME      NULL                    COMMENT '수정일시',
     intt_cd              VARCHAR(10)   NULL                    COMMENT '기관 코드',
@@ -142,6 +195,7 @@ CREATE TABLE treatments (
     KEY idx_treatments_doc        (treatment_doc),
     KEY idx_treatments_date       (treatment_date),
     KEY idx_treatments_department (department_id),
+    KEY idx_treatments_sync_pg    (patient_no, synced_to_postgres_at),
     CONSTRAINT fk_treatments_checkin    FOREIGN KEY (checkIn_id)    REFERENCES check_in(checkIn_id),
     CONSTRAINT fk_treatments_patient    FOREIGN KEY (patient_no)    REFERENCES Patient(patient_no),
     CONSTRAINT fk_treatments_department FOREIGN KEY (department_id) REFERENCES department(id)
