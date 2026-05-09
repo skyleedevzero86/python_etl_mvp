@@ -122,7 +122,20 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="파이프라인·통계 MVP", lifespan=lifespan)
+    app = FastAPI(
+        title="파이프라인·통계 MVP",
+        version="0.1.0",
+        summary="배치 적재와 대시보드 통계 조회 API",
+        description=(
+            "MySQL 기반의 배치 데이터 적재와 통계 조회를 제공하는 API입니다.\n\n"
+            "- 대시보드 HTML과 JSON 통계 제공\n"
+            "- 테이블별 통계/상세 조회 제공\n"
+            "- 수동 파이프라인 실행 제공\n"
+            "- `/pipeline/run/{job}`은 `POST`만 허용되며, "
+            "`ENABLE_PIPELINE_WRITE=true`일 때만 실행됩니다."
+        ),
+        lifespan=lifespan,
+    )
 
     @app.middleware("http")
     async def _log_request_failures(request: Request, call_next):

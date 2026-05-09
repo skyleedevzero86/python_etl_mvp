@@ -35,8 +35,8 @@ def start_weekly_pipeline_scheduler(
     settings: Settings,
     session_factory: "sessionmaker[Session]",
 ) -> BackgroundScheduler | None:
-    if not settings.enable_pipeline_write:
-        logger.info("파이프라인 쓰기 비활성화 상태라 스케줄러를 시작하지 않습니다.")
+    if not settings.enable_pipeline_scheduler:
+        logger.info("파이프라인 스케줄러 비활성화 상태라 시작하지 않습니다.")
         return None
 
     sched = BackgroundScheduler(timezone="Asia/Seoul")

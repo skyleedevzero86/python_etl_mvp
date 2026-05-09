@@ -52,7 +52,8 @@ class Settings(BaseSettings):
     scheduler_weekday: str = "mon"
     scheduler_initial_hour: int = 9
     scheduler_completion_hour: int = 16
-    enable_pipeline_write: bool = False
+    enable_pipeline_write: bool = True
+    enable_pipeline_scheduler: bool = False
 
     @model_validator(mode="after")
     def _warn_mysql_password_if_needed(self) -> "Settings":
